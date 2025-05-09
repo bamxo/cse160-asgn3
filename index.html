@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assignment 3 - Virtual World Explorer</title>
+  
+  <!-- WebGL Libraries -->
+  <script src="lib/webgl-utils.js"></script>
+  <script src="lib/webgl-debug.js"></script>
+  <script src="lib/cuon-utils.js"></script>
+  <script src="lib/cuon-matrix.js"></script>
+  
+  <!-- Custom Classes -->
+  <script src="js/cube.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/texture-generator.js"></script>
+  <script src="js/grass-grid.js"></script>
+  <script src="js/panda.js"></script>
+  <script src="js/terrain.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/main.js"></script>
+  
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f0f0;
+      overflow: hidden;
+    }
+    
+    .main-container {
+      display: flex;
+      flex-direction: row;
+      padding: 10px;
+      height: 100vh;
+      box-sizing: border-box;
+      align-items: flex-start;
+      gap: 15px;
+      justify-content: center;
+    }
+    
+    .canvas-container {
+      position: relative;
+      border: 2px solid #333;
+      border-radius: 5px;
+      overflow: hidden;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+      max-width: 1400px;
+      flex: 1;
+      height: 600px; /* Set fixed height to match canvas */
+    }
+    
+    #webgl {
+      display: block;
+      background-color: black;
+      cursor: crosshair;
+      width: 100%;
+      height: 600px;
+    }
+    
+    .overlay {
+      position: absolute;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      background-color: rgba(0, 0, 0, 0.5);
+      font-size: 14px;
+    }
+    
+    #fpsCounter {
+      top: 10px;
+      right: 10px;
+    }
+    
+    #targetBlockInfo {
+      bottom: 10px;
+      left: 10px;
+    }
+    
+    #blockCounter {
+      top: 10px;
+      left: 10px;
+    }
+    
+    /* Panda Rescue Quest UI elements */
+    #pandaCounter {
+      top: 50px;
+      left: 10px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: #7dcc7d;
+      font-weight: bold;
+    }
+    
+    #winMessage {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 20px;
+      font-size: 24px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: #ffdf00;
+      border: 2px solid white;
+      text-align: center;
+      border-radius: 10px;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0% { transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -50%) scale(1.05); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+    
+    /* Crosshair styles */
+    #crosshair {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 30px;
+      font-weight: bold;
+      padding: 0;
+      background: none;
+      color: white;
+      text-shadow: 0 0 3px black, 0 0 5px rgba(0,0,0,0.5);
+      pointer-events: none;
+      z-index: 100;
+    }
+    
+    /* Minecraft-like hotbar styles */
+    #hotbar {
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: none;
+      padding: 0;
+      pointer-events: auto;
+      z-index: 1000;
+      opacity: 0.8;
+      transition: opacity 0.3s ease;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+      transform-origin: bottom center;
+      transform: translateX(-50%) scale(0.8); /* Scale down to 80% of original size */
+    }
+    
+    #hotbar:hover {
+      opacity: 1;
+      transform: translateX(-50%) scale(0.85); /* Slightly larger on hover */
+    }
+    
+    .hotbar-slot.selected {
+      background-color: rgba(255, 255, 255, 0.5);
+      border-color: #fff;
+      transform: translateY(-6px); /* Reduced from -8px */
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
+    }
+    
+    .hotbar-item {
+      width: 40px; /* Reduced from 50px */
+      height: 40px; /* Reduced from 50px */
+      border: 2px solid #444; /* Thinner border */
+      border-radius: 4px;
+      image-rendering: pixelated;
+      display: block;
+      box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .info-panel {
+      background-color: white;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      width: 550px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      max-height: 600px; /* Match the canvas height */
+      overflow-y: auto; /* Add scrolling capability */
+    }
+
+    .info-panel h1 {
+      align-self: center;
+      margin-bottom: 10px; /* Add some spacing */
+    }
+    
+    .info-content {
+      display: flex;
+      flex-direction: row;
+      gap: 20px;
+      overflow-y: auto; /* Enable scrolling within content area */
+    }
+    
+    .controls-section {
+      flex: 1;
+      font-size: 14px;
+    }
+    
+    .gameplay-section {
+      flex: 1;
+      font-size: 14px;
+    }
+    
+    .gameplay-section p {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    
+    h1 {
+      margin-top: 0;
+      font-size: 22px;
+      color: #333;
+    }
+    
+    h2 {
+      font-size: 16px;
+      color: #555;
+      margin-top: 12px;
+      margin-bottom: 6px;
+    }
+    
+    .controls-list {
+      list-style-type: none;
+      padding-left: 0;
+      margin-bottom: 10px;
+    }
+    
+    .controls-list li {
+      margin-bottom: 4px;
+      display: flex;
+    }
+    
+    .key {
+      background-color: #eee;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-right: 8px;
+      min-width: 18px;
+      text-align: center;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    
+    .description {
+      flex: 1;
+    }
+    
+    .story {
+      font-style: italic;
+      color: #666;
+      line-height: 1.3;
+      font-size: 0.95em;
+    }
+    
+    footer {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #888;
+    }
+    
+    .hotbar-label {
+      font-size: 9px; /* Reduced from 10px */
+      margin-top: 3px; /* Reduced from 4px */
+      color: white;
+      text-align: center;
+    }
+    
+    .hotbar-container {
+      display: flex;
+      background-color: rgba(30, 30, 30, 0.8);
+      border: 2px solid #999; /* Thinner border */
+      border-radius: 6px;
+      padding: 8px; /* Reduced from 10px */
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+    }
+    
+    .hotbar-slot {
+      width: 55px; /* Reduced from 70px */
+      height: 65px; /* Reduced from 80px */
+      margin: 0 6px; /* Reduced from 8px */
+      background-color: rgba(255, 255, 255, 0.3);
+      border: 2px solid #555; /* Thinner border */
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: all 0.2s;
+      pointer-events: auto;
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+    }
+    
+    /* Block textures */
+    .texture-grass {
+      background: linear-gradient(to bottom, #7dcc7d 70%, #997950 30%);
+      background-size: cover;
+    }
+    
+    .texture-dirt {
+      background-color: #997950;
+      background-image: radial-gradient(#8a6840 15%, transparent 15%),
+                         radial-gradient(#8a6840 15%, transparent 15%);
+      background-size: 10px 10px;
+      background-position: 0 0, 5px 5px;
+    }
+    
+    .texture-stone {
+      background-color: #aaaaaa;
+      background-image: radial-gradient(#999 20%, transparent 20%),
+                         radial-gradient(#999 20%, transparent 20%);
+      background-size: 10px 10px;
+      background-position: 0 0, 5px 5px;
+    }
+    
+    .texture-wood {
+      background-color: #a67c52;
+      background-image: repeating-linear-gradient(90deg, 
+                         #8d6239 0px, #8d6239 4px, 
+                         #a67c52 4px, #a67c52 8px);
+    }
+    
+    .texture-leaves {
+      background-color: #3d7a25;
+      background-image: radial-gradient(#2a541a 15%, transparent 15%),
+                         radial-gradient(#2a541a 15%, transparent 15%);
+      background-size: 8px 8px;
+      background-position: 0 0, 4px 4px;
+    }
+    
+    .texture-brick {
+      background-color: #aa4444;
+      background-image: 
+        linear-gradient(#853333 2px, transparent 2px),
+        linear-gradient(90deg, #853333 2px, transparent 2px),
+        linear-gradient(#853333 1px, transparent 1px),
+        linear-gradient(90deg, #853333 1px, transparent 1px);
+      background-size: 20px 20px, 20px 20px, 5px 5px, 5px 5px;
+      background-position: -2px -2px, -2px -2px, -1px -1px, -1px -1px;
+    }
+  </style>
+  <script>
+    window.addEventListener('load', function() {
+      // Debug information for hotbar
+      console.log('Page loaded, checking hotbar elements');
+      const hotbar = document.getElementById('hotbar');
+      console.log('Hotbar element:', hotbar);
+      
+      const hotbarItems = document.querySelectorAll('.hotbar-item');
+      console.log('Hotbar items found:', hotbarItems.length);
+      
+      hotbarItems.forEach((item, index) => {
+        console.log(`Hotbar item ${index}:`, item);
+        console.log(`  - Classes:`, item.className);
+        console.log(`  - Computed style:`, getComputedStyle(item).backgroundImage);
+      });
+    });
+  </script>
+</head>
+<body onload="main()">
+  <div class="main-container">
+    <div class="canvas-container">
+      <canvas id="webgl" width="2100" height="900">
+        Please use a browser that supports WebGL
+      </canvas>
+      <div id="fpsCounter" class="overlay">FPS: 0</div>
+      <div id="targetBlockInfo" class="overlay">No target block</div>
+      <div id="blockCounter" class="overlay">Blocks: 0</div>
+      
+      <!-- Crosshair for aiming -->
+      <div id="crosshair" class="overlay">+</div>
+      
+      <!-- Minecraft-like hotbar -->
+      <div id="hotbar" class="overlay">
+        <div class="hotbar-container">
+          <div class="hotbar-slot" data-index="0">
+            <div class="hotbar-item texture-grass"></div>
+            <div class="hotbar-label">1 - Grass</div>
+          </div>
+          <div class="hotbar-slot selected" data-index="1">
+            <div class="hotbar-item texture-dirt"></div>
+            <div class="hotbar-label">2 - Dirt</div>
+          </div>
+          <div class="hotbar-slot" data-index="2">
+            <div class="hotbar-item texture-stone"></div>
+            <div class="hotbar-label">3 - Stone</div>
+          </div>
+          <div class="hotbar-slot" data-index="3">
+            <div class="hotbar-item texture-wood"></div>
+            <div class="hotbar-label">4 - Wood</div>
+          </div>
+          <div class="hotbar-slot" data-index="4">
+            <div class="hotbar-item texture-leaves"></div>
+            <div class="hotbar-label">5 - Leaves</div>
+          </div>
+          <div class="hotbar-slot" data-index="5">
+            <div class="hotbar-item texture-brick"></div>
+            <div class="hotbar-label">6 - Brick</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="info-panel">
+      <h1>Virtual World Explorer</h1>
+      
+      <div class="info-content">
+        <div class="controls-section">
+          <h2>Controls</h2>
+          <ul class="controls-list">
+            <li><span class="key">W</span> <span class="description">Move forward</span></li>
+            <li><span class="key">A</span> <span class="description">Move left</span></li>
+            <li><span class="key">S</span> <span class="description">Move backward</span></li>
+            <li><span class="key">D</span> <span class="description">Move right</span></li>
+            <li><span class="key">Q</span> <span class="description">Turn left</span></li>
+            <li><span class="key">E</span> <span class="description">Turn right</span></li>
+            <li><span class="key">Mouse</span> <span class="description">Look around</span></li>
+            <li><span class="key">Left Click</span> <span class="description">Remove block</span></li>
+            <li><span class="key">F</span> <span class="description">Remove block (alternate)</span></li>
+            <li><span class="key">Right Click</span> <span class="description">Place block</span></li>
+            <li><span class="key">G</span> <span class="description">Place block (alternate)</span></li>
+            <li><span class="key">1-6</span> <span class="description">Select block type</span></li>
+            <li><span class="key">Scroll</span> <span class="description">Cycle through blocks</span></li>
+            <li><span class="key">P</span> <span class="description">Animate pandas</span></li>
+          </ul>
+        </div>
+        
+        <div class="gameplay-section">
+          <p class="story">Welcome to Panda Rescue Quest! The main panda has lost its baby pandas in the forest. They're hiding near trees, behind hills, and in the terrain. Your mission is to explore the world, find all the baby pandas, and reunite them with their parent. When you get close to a baby panda, it will follow you. Lead all baby pandas back to the main panda to win!</p>
+          
+          <h2>How to Play</h2>
+          <p>Click on the canvas to enable mouse control for looking around. Use WASD keys to move and Q/E to rotate. Use SPACE to move up and SHIFT to move down. Explore the environment to find the baby pandas - they're small pandas hiding near trees. When you get close to a baby panda, it will start following you. Lead all the baby pandas back to the main panda to win the game. Your progress is shown at the top left of the screen.</p>
+          
+          <p>You can also interact with the world - Left-click or F key to remove blocks and right-click or G key to place new blocks. Use number keys 1-6 or mouse scroll to select different block types from the hotbar.</p>
+          
+          <h2>Game Objective</h2>
+          <p>Find all the baby pandas (there are 4 of them) hidden in the world and bring them back to the main panda.</p>
+          
+          <footer>
+            Created by Landon Nguyen for CSE 160 Assignment 3
+          </footer>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html> 
